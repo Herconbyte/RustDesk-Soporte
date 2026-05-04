@@ -434,7 +434,6 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
   
   // Removed old buildHelpCards implementation
-  }
 
   Widget buildInstallCard(String title, String content, String btnText,
       GestureTapCallback onPressed,
