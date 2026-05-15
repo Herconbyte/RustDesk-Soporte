@@ -94,9 +94,9 @@ jobs:
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
-      - name: Build
+      - name: Build (sin hwcodec; ffmpeg requiere setup custom upstream)
         env: { VCPKG_ROOT: "${{ github.workspace }}/vcpkg" }
-        run: python3 ./build.py --portable --hwcodec --flutter --unix-file-copy-paste
+        run: python3 ./build.py --portable --flutter --unix-file-copy-paste
         shell: bash
 
       - name: Package
@@ -134,7 +134,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { channel: stable, flutter-version: "${{ env.FLUTTER_VERSION }}" }
 
-      - run: brew install nasm yasm cmake create-dmg
+      - run: brew install nasm yasm cmake create-dmg opus libvpx libyuv
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
@@ -182,10 +182,21 @@ jobs:
 
       - run: brew install nasm yasm cmake create-dmg
 
+      - name: Setup vcpkg (macOS Intel necesita vcpkg, homebrew solo es para arm64)
+        uses: lukka/run-vcpkg@v11
+        with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}" }
+
+      - name: vcpkg install
+        env: { VCPKG_DEFAULT_TRIPLET: x64-osx }
+        run: $VCPKG_ROOT/vcpkg install --triplet x64-osx --x-install-root="$VCPKG_ROOT/installed"
+        shell: bash
+
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
       - name: Build
-        env: { MACOSX_DEPLOYMENT_TARGET: "10.14" }
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "10.14"
+          VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
         run: ./build.py --flutter
 
       - name: Create unsigned DMG
@@ -225,6 +236,7 @@ jobs:
             libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxdo-dev libayatana-appindicator3-dev libnss3 libxcursor1 \
             libasound2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libunwind-dev libunwind8 \
             gcc-multilib g++-multilib rpm
 
       - uses: dtolnay/rust-toolchain@master
@@ -249,10 +261,10 @@ jobs:
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
-      - name: Build
+      - name: Build (sin hwcodec; ffmpeg requiere setup custom upstream)
         env: { VCPKG_ROOT: "${{ github.workspace }}/vcpkg" }
         run: |
-          python3 ./build.py --flutter --hwcodec --unix-file-copy-paste
+          python3 ./build.py --flutter --unix-file-copy-paste
           ls -la rustdesk-*.deb || true
 
       - uses: actions/upload-artifact@v4
@@ -268,16 +280,26 @@ jobs:
   build-android:
     name: Android arm64
     if: inputs.build-android
+    needs: [generate-bridge]
     runs-on: ubuntu-22.04
     steps:
+      - uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
       - uses: actions/checkout@v4
         with: { submodules: recursive }
+
+      - uses: actions/download-artifact@v4
+        with: { name: bridge-artifact, path: ./ }
 
       - name: Install system deps
         run: |
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
-            curl wget unzip xz-utils clang cmake ninja-build \
+            curl wget unzip xz-utils nasm yasm clang cmake ninja-build \
             pkg-config libsodium-dev libssl-dev gcc-multilib g++-multilib
 
       - uses: dtolnay/rust-toolchain@master
@@ -302,17 +324,33 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { channel: stable, flutter-version: "${{ env.ANDROID_FLUTTER_VERSION }}" }
 
+      - name: Setup vcpkg (necesario para cross-compile a Android)
+        uses: lukka/run-vcpkg@v11
+        with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}" }
+
       - run: cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
 
-      - name: Build APK
+      - name: Build Android deps (vcpkg cross-compile)
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+          VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
+        run: bash flutter/build_android_deps.sh arm64-v8a
+
+      - name: Build librustdesk.so para Android arm64
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+          VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
         run: |
-          # Bridge codegen para Android target
-          cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
-          # Build Android arm64
-          bash flutter/build_android_deps.sh arm64-v8a || true
+          rustup target add aarch64-linux-android
+          cargo ndk --target aarch64-linux-android --platform 21 -- build --release --features flutter
+          # Copiar la lib al lugar que flutter espera
+          mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
+          cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/
+
+      - name: Build APK
+        run: |
           cd flutter
           flutter pub get
           flutter build apk --release --target-platform android-arm64
