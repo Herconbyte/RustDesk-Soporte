@@ -1,163 +1,146 @@
 name: Herconbyte Build
 
-# Workflow dedicado a Herconbyte. Compila Windows + macOS (aarch64) bajo demanda.
+# Workflow dedicado a Herconbyte. Compila Windows + macOS (aarch64 + x86_64) + Linux + Android.
 # Se dispara manualmente desde la pestania Actions de GitHub (boton "Run workflow")
-# o automaticamente al pushear a la rama 'main' o crear un tag 'v*'.
+# o automaticamente al pushear a 'main' (no a 'master' para evitar build accidental).
 #
-# NO firma ni notariza nada (no tenemos Apple Developer ID ni cert Windows).
-# Los binarios resultantes son los mismos "sin firmar" que ya estabas usando,
-# pero ahora con TUS cambios al codigo fuente compilados adentro.
+# NO firma ni notariza nada. Los binarios resultantes son "sin firmar",
+# listos para empaquetar con Inno Setup (Windows) o distribuir directo (Mac/Linux/Android).
 
 on:
   workflow_dispatch:
     inputs:
       build-windows:
-        description: 'Compilar Windows x86_64'
+        description: 'Compilar Windows x86_64 (.exe + DLLs)'
         type: boolean
         default: true
-      build-macos:
-        description: 'Compilar macOS aarch64 (Apple Silicon)'
+      build-macos-arm:
+        description: 'Compilar macOS aarch64 (M1/M2/M3, .dmg)'
         type: boolean
-        default: false
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+        default: true
+      build-macos-intel:
+        description: 'Compilar macOS x86_64 (Intel Macs, .dmg)'
+        type: boolean
+        default: true
+      build-linux:
+        description: 'Compilar Linux x86_64 (.deb + .AppImage)'
+        type: boolean
+        default: true
+      build-android:
+        description: 'Compilar Android arm64 (.apk)'
+        type: boolean
+        default: true
 
 env:
   RUST_VERSION: "1.75"
   MAC_RUST_VERSION: "1.81"
   FLUTTER_VERSION: "3.24.5"
+  ANDROID_FLUTTER_VERSION: "3.24.5"
+  CARGO_NDK_VERSION: "3.1.2"
+  NDK_VERSION: "r28c"
+  LLVM_VERSION: "15.0.6"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
   VERSION: "1.4.6"
 
 jobs:
   generate-bridge:
-    if: github.event_name == 'push' || inputs.build-windows || inputs.build-macos
+    if: inputs.build-windows || inputs.build-macos-arm || inputs.build-macos-intel || inputs.build-linux
     uses: ./.github/workflows/bridge.yml
 
   build-windows:
     name: Windows x86_64
-    if: github.event_name == 'push' || inputs.build-windows
+    if: inputs.build-windows
     needs: [generate-bridge]
     runs-on: windows-2022
     steps:
-      - name: Export GitHub Actions cache vars
-        uses: actions/github-script@v6
+      - uses: actions/github-script@v6
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+        with: { submodules: recursive }
 
-      - name: Restore bridge artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: bridge-artifact
-          path: ./
+      - uses: actions/download-artifact@v4
+        with: { name: bridge-artifact, path: ./ }
 
-      - name: Install LLVM and Clang
+      - name: Install LLVM
         uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "15.0.6"
+        with: { version: "15.0.6" }
 
-      - name: Install Rust toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-pc-windows-msvc
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "herconbyte-windows"
+        with: { prefix-key: "hcb-windows" }
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+        with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}" }
 
-      - name: Install vcpkg dependencies
-        env:
-          VCPKG_DEFAULT_TRIPLET: x64-windows-static
-        run: |
-          $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+      - name: vcpkg install
+        env: { VCPKG_DEFAULT_TRIPLET: x64-windows-static }
+        run: $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
         shell: bash
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
-        with:
-          channel: "stable"
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+        with: { channel: stable, flutter-version: "${{ env.FLUTTER_VERSION }}" }
 
-      - name: Install flutter_rust_bridge_codegen
-        run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+      - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
-      - name: Build RustDesk
-        env:
-          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      - name: Build
+        env: { VCPKG_ROOT: "${{ github.workspace }}/vcpkg" }
         run: python3 ./build.py --portable --hwcodec --flutter --unix-file-copy-paste
         shell: bash
 
-      - name: Package output
+      - name: Package
         run: |
           mkdir -p dist-windows
           cp -r ./flutter/build/windows/x64/runner/Release/* dist-windows/
         shell: bash
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: herconbyte-windows-x86_64
           path: dist-windows/
           retention-days: 14
 
-  build-macos:
+  build-macos-arm:
     name: macOS aarch64
-    if: inputs.build-macos
+    if: inputs.build-macos-arm
     needs: [generate-bridge]
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+        with: { submodules: recursive }
 
-      - name: Restore bridge artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: bridge-artifact
-          path: ./
+      - uses: actions/download-artifact@v4
+        with: { name: bridge-artifact, path: ./ }
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.MAC_RUST_VERSION }}
           targets: aarch64-apple-darwin
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "herconbyte-macos"
+        with: { prefix-key: "hcb-macos-arm" }
 
-      - name: Install Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: "stable"
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, flutter-version: "${{ env.FLUTTER_VERSION }}" }
 
-      - name: Install brew deps
-        run: brew install nasm yasm cmake create-dmg
+      - run: brew install nasm yasm cmake create-dmg
 
-      - name: Install flutter_rust_bridge_codegen
-        run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+      - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
-      - name: Build RustDesk for macOS
+      - name: Build
+        env: { MACOSX_DEPLOYMENT_TARGET: "10.14" }
         run: ./build.py --flutter
-        env:
-          MACOSX_DEPLOYMENT_TARGET: "10.14"
 
       - name: Create unsigned DMG
         run: |
@@ -168,9 +151,175 @@ jobs:
             herconbyte-aarch64.dmg \
             ./flutter/build/macos/Build/Products/Release/RustDesk.app
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: herconbyte-macos-aarch64
           path: herconbyte-aarch64.dmg
           retention-days: 14
+
+  build-macos-intel:
+    name: macOS x86_64 (Intel)
+    if: inputs.build-macos-intel
+    needs: [generate-bridge]
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+
+      - uses: actions/download-artifact@v4
+        with: { name: bridge-artifact, path: ./ }
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.MAC_RUST_VERSION }}
+          targets: x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with: { prefix-key: "hcb-macos-intel" }
+
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, flutter-version: "${{ env.FLUTTER_VERSION }}" }
+
+      - run: brew install nasm yasm cmake create-dmg
+
+      - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+
+      - name: Build
+        env: { MACOSX_DEPLOYMENT_TARGET: "10.14" }
+        run: ./build.py --flutter
+
+      - name: Create unsigned DMG
+        run: |
+          create-dmg --icon "RustDesk.app" 200 190 \
+            --hide-extension "RustDesk.app" \
+            --window-size 800 400 \
+            --app-drop-link 600 185 \
+            herconbyte-x86_64.dmg \
+            ./flutter/build/macos/Build/Products/Release/RustDesk.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: herconbyte-macos-x86_64
+          path: herconbyte-x86_64.dmg
+          retention-days: 14
+
+  build-linux:
+    name: Linux x86_64
+    if: inputs.build-linux
+    needs: [generate-bridge]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+
+      - uses: actions/download-artifact@v4
+        with: { name: bridge-artifact, path: ./ }
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            curl wget unzip xz-utils nasm yasm libgtk-3-dev \
+            clang cmake libclang-dev ninja-build pkg-config \
+            libsodium-dev libssl-dev libpulse-dev libdbus-1-dev \
+            libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxdo-dev libayatana-appindicator3-dev libnss3 libxcursor1 \
+            libasound2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gcc-multilib g++-multilib rpm
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-unknown-linux-gnu
+
+      - uses: Swatinem/rust-cache@v2
+        with: { prefix-key: "hcb-linux" }
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}" }
+
+      - name: vcpkg install
+        env: { VCPKG_DEFAULT_TRIPLET: x64-linux }
+        run: $VCPKG_ROOT/vcpkg install --triplet x64-linux --x-install-root="$VCPKG_ROOT/installed"
+        shell: bash
+
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, flutter-version: "${{ env.FLUTTER_VERSION }}" }
+
+      - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+
+      - name: Build
+        env: { VCPKG_ROOT: "${{ github.workspace }}/vcpkg" }
+        run: |
+          python3 ./build.py --flutter --hwcodec --unix-file-copy-paste
+          ls -la rustdesk-*.deb || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: herconbyte-linux-x86_64
+          path: |
+            rustdesk-*.deb
+            rustdesk-*.rpm
+            rustdesk-*.AppImage
+          retention-days: 14
+          if-no-files-found: warn
+
+  build-android:
+    name: Android arm64
+    if: inputs.build-android
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: recursive }
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            curl wget unzip xz-utils clang cmake ninja-build \
+            pkg-config libsodium-dev libssl-dev gcc-multilib g++-multilib
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with: { prefix-key: "hcb-android" }
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
+
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, flutter-version: "${{ env.ANDROID_FLUTTER_VERSION }}" }
+
+      - run: cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
+
+      - name: Build APK
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: |
+          # Bridge codegen para Android target
+          cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+          # Build Android arm64
+          bash flutter/build_android_deps.sh arm64-v8a || true
+          cd flutter
+          flutter pub get
+          flutter build apk --release --target-platform android-arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: herconbyte-android-arm64
+          path: flutter/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
+          if-no-files-found: warn
