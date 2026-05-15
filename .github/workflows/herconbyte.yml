@@ -134,16 +134,23 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { channel: stable, flutter-version: "${{ env.FLUTTER_VERSION }}" }
 
-      - name: Install brew deps (libyuv viene del tap de rustdesk-org)
-        run: |
-          brew install nasm yasm cmake create-dmg opus libvpx
-          brew tap rustdesk-org/homebrew-rustdesk-libyuv
-          brew install --HEAD rustdesk-org/homebrew-rustdesk-libyuv/libyuv
+      - run: brew install yasm cmake create-dmg pkg-config
+
+      - name: Setup vcpkg (igual que Mac Intel, brew no tiene libyuv)
+        uses: lukka/run-vcpkg@v11
+        with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}" }
+
+      - name: vcpkg install (arm64-osx)
+        env: { VCPKG_DEFAULT_TRIPLET: arm64-osx }
+        run: $VCPKG_ROOT/vcpkg install --triplet arm64-osx --x-install-root="$VCPKG_ROOT/installed"
+        shell: bash
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
       - name: Build
-        env: { MACOSX_DEPLOYMENT_TARGET: "10.14" }
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "10.14"
+          VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
         run: ./build.py --flutter
 
       - name: Create unsigned DMG
