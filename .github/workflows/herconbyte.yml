@@ -94,9 +94,9 @@ jobs:
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
-      - name: Build (sin hwcodec; ffmpeg requiere setup custom upstream)
+      - name: Build (sin hwcodec ni unix-file-copy-paste; son solo para Linux/Mac)
         env: { VCPKG_ROOT: "${{ github.workspace }}/vcpkg" }
-        run: python3 ./build.py --portable --flutter --unix-file-copy-paste
+        run: python3 ./build.py --portable --flutter
         shell: bash
 
       - name: Package
