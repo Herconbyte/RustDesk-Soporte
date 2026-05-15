@@ -158,7 +158,8 @@ class _PeerCardState extends State<_PeerCard>
             height: isPortrait ? 50 : null,
             child: Stack(
               children: [
-                getPlatformImage(peer.platform, size: isPortrait ? 38 : 30)
+                _platformImageWithStatus(
+                        peer.platform, isPortrait ? 38 : 30, peer.online)
                     .paddingAll(6),
                 if (_shouldBuildPasswordIcon(peer))
                   Positioned(
@@ -313,7 +314,8 @@ class _PeerCardState extends State<_PeerCard>
                               Container(
                                 padding: const EdgeInsets.all(6),
                                 child:
-                                    getPlatformImage(peer.platform, size: 60),
+                                    _platformImageWithStatus(
+                                        peer.platform, 60, peer.online),
                               ),
                               Row(
                                 children: [
@@ -1470,8 +1472,43 @@ Widget getOnline(double rightPadding, bool online) {
       waitDuration: const Duration(seconds: 1),
       child: Padding(
           padding: EdgeInsets.fromLTRB(0, 4, rightPadding, 4),
-          child: CircleAvatar(
-              radius: 3, backgroundColor: online ? Colors.green : kColorWarn)));
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: online ? const Color(0xFF22C55E) : const Color(0xFF6B7280),
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: (online ? const Color(0xFF22C55E) : Colors.black)
+                      .withOpacity(0.35),
+                  blurRadius: 4,
+                  spreadRadius: 0.5,
+                ),
+              ],
+            ),
+          )));
+}
+
+// Logo de plataforma (Windows / Mac / Linux) con apariencia "apagada"
+// cuando el peer esta offline: se desatura y baja la opacidad.
+// Asi se nota a metros de distancia que la maquina no esta conectada.
+Widget _platformImageWithStatus(String platform, double size, bool online) {
+  final img = getPlatformImage(platform, size: size);
+  if (online) return img;
+  return Opacity(
+    opacity: 0.45,
+    child: ColorFiltered(
+      colorFilter: const ColorFilter.matrix(<double>[
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0, 0, 0, 1, 0,
+      ]),
+      child: img,
+    ),
+  );
 }
 
 Widget build_more(BuildContext context, {bool invert = false}) {
