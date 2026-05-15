@@ -236,7 +236,7 @@ jobs:
             libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxdo-dev libayatana-appindicator3-dev libnss3 libxcursor1 \
             libasound2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libunwind-dev libunwind8 \
+            libunwind-dev libunwind8 libpam0g-dev \
             gcc-multilib g++-multilib rpm
 
       - uses: dtolnay/rust-toolchain@master
