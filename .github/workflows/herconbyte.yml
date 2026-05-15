@@ -134,7 +134,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { channel: stable, flutter-version: "${{ env.FLUTTER_VERSION }}" }
 
-      - run: brew install nasm yasm cmake create-dmg opus libvpx libyuv
+      - run: brew install nasm yasm cmake create-dmg opus libvpx
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
