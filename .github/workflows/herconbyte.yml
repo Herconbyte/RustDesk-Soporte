@@ -83,9 +83,17 @@ jobs:
         uses: lukka/run-vcpkg@v11
         with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}" }
 
-      - name: vcpkg install
+      - name: vcpkg install (con ffmpeg forzado para hwcodec)
         env: { VCPKG_DEFAULT_TRIPLET: x64-windows-static }
-        run: $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+        run: |
+          set -e
+          # 1) Manifest install (lee vcpkg.json del repo)
+          $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
+          # 2) Forzar ffmpeg via overlay port (por si el manifest no lo activo)
+          $VCPKG_ROOT/vcpkg install "ffmpeg[amf,nvcodec,qsv]" --triplet x64-windows-static --overlay-ports=./res/vcpkg --x-install-root="$VCPKG_ROOT/installed"
+          # 3) Verificar headers criticos antes de pasar a build
+          echo "=== Verificar headers ffmpeg ==="
+          ls "$VCPKG_ROOT/installed/x64-windows-static/include/libavcodec/avcodec.h" || (echo "FFMPEG HEADERS NO INSTALADOS" && exit 1)
         shell: bash
 
       - name: Install Flutter
