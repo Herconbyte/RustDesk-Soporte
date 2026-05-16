@@ -83,17 +83,26 @@ jobs:
         uses: lukka/run-vcpkg@v11
         with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}" }
 
-      - name: vcpkg install (con ffmpeg forzado para hwcodec)
+      - name: vcpkg install (con debug)
         env: { VCPKG_DEFAULT_TRIPLET: x64-windows-static }
         run: |
           set -e
-          # 1) Manifest install (lee vcpkg.json del repo)
+          # 1) Manifest install (lee vcpkg.json del repo y sus condicionales)
           $VCPKG_ROOT/vcpkg install --triplet x64-windows-static --x-install-root="$VCPKG_ROOT/installed"
-          # 2) Forzar ffmpeg via overlay port (por si el manifest no lo activo)
-          $VCPKG_ROOT/vcpkg install "ffmpeg[amf,nvcodec,qsv]" --triplet x64-windows-static --overlay-ports=./res/vcpkg --x-install-root="$VCPKG_ROOT/installed"
-          # 3) Verificar headers criticos antes de pasar a build
+          # 2) Verificar si ffmpeg quedo instalado por el manifest
           echo "=== Verificar headers ffmpeg ==="
-          ls "$VCPKG_ROOT/installed/x64-windows-static/include/libavcodec/avcodec.h" || (echo "FFMPEG HEADERS NO INSTALADOS" && exit 1)
+          if [ -f "$VCPKG_ROOT/installed/x64-windows-static/include/libavcodec/avcodec.h" ]; then
+            echo "FFMPEG OK via manifest"
+          else
+            echo "FFMPEG no instalado por manifest. Forzando con --classic..."
+            cd /tmp  # salir del directorio que tiene vcpkg.json para evitar manifest mode
+            $VCPKG_ROOT/vcpkg install --classic "ffmpeg[amf,nvcodec,qsv]" --triplet x64-windows-static --overlay-ports="$GITHUB_WORKSPACE/res/vcpkg" --x-install-root="$VCPKG_ROOT/installed"
+            cd "$GITHUB_WORKSPACE"
+            # Verificar de nuevo
+            ls "$VCPKG_ROOT/installed/x64-windows-static/include/libavcodec/avcodec.h" || (echo "FFMPEG TODAVIA NO INSTALADO" && exit 1)
+          fi
+          echo "=== Headers ffmpeg disponibles ==="
+          ls "$VCPKG_ROOT/installed/x64-windows-static/include/libavcodec/" | head -5
         shell: bash
 
       - name: Install Flutter
