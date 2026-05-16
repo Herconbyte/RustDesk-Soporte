@@ -94,9 +94,9 @@ jobs:
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
-      - name: Build (sin hwcodec ni unix-file-copy-paste; son solo para Linux/Mac)
+      - name: Build (con hwcodec - vcpkg instala ffmpeg con x64-windows-static)
         env: { VCPKG_ROOT: "${{ github.workspace }}/vcpkg" }
-        run: python3 ./build.py --portable --flutter
+        run: python3 ./build.py --portable --flutter --hwcodec
         shell: bash
 
       - name: Package
@@ -148,18 +148,17 @@ jobs:
         uses: lukka/run-vcpkg@v11
         with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}" }
 
-      - name: vcpkg install (arm64-osx)
-        env: { VCPKG_DEFAULT_TRIPLET: arm64-osx }
-        run: $VCPKG_ROOT/vcpkg install --triplet arm64-osx --x-install-root="$VCPKG_ROOT/installed"
+      - name: vcpkg install (sin triplet, default = arm64-osx, instala ffmpeg via vcpkg.json)
+        run: $VCPKG_ROOT/vcpkg install --x-install-root="$VCPKG_ROOT/installed"
         shell: bash
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
-      - name: Build
+      - name: Build (con hwcodec)
         env:
-          MACOSX_DEPLOYMENT_TARGET: "10.14"
+          MACOSX_DEPLOYMENT_TARGET: "12.3"
           VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
-        run: ./build.py --flutter
+        run: ./build.py --flutter --hwcodec --unix-file-copy-paste
 
       - name: Create unsigned DMG
         run: |
@@ -205,18 +204,17 @@ jobs:
         uses: lukka/run-vcpkg@v11
         with: { vcpkgGitCommitId: "${{ env.VCPKG_COMMIT_ID }}" }
 
-      - name: vcpkg install
-        env: { VCPKG_DEFAULT_TRIPLET: x64-osx }
-        run: $VCPKG_ROOT/vcpkg install --triplet x64-osx --x-install-root="$VCPKG_ROOT/installed"
+      - name: vcpkg install (sin triplet, default = x64-osx, instala ffmpeg)
+        run: $VCPKG_ROOT/vcpkg install --x-install-root="$VCPKG_ROOT/installed"
         shell: bash
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
-      - name: Build
+      - name: Build (con hwcodec)
         env:
           MACOSX_DEPLOYMENT_TARGET: "10.14"
           VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
-        run: ./build.py --flutter
+        run: ./build.py --flutter --hwcodec --unix-file-copy-paste
 
       - name: Create unsigned DMG
         run: |
@@ -245,7 +243,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: bridge-artifact, path: ./ }
 
-      - name: Install system deps
+      - name: Install system deps (con libva-dev + libxfixes-dev para hwcodec)
         run: |
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends \
@@ -255,7 +253,7 @@ jobs:
             libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libxdo-dev libayatana-appindicator3-dev libnss3 libxcursor1 \
             libasound2-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            libunwind-dev libunwind8 libpam0g-dev \
+            libunwind-dev libunwind8 libpam0g-dev libva-dev libxfixes-dev \
             gcc-multilib g++-multilib rpm
 
       - uses: dtolnay/rust-toolchain@master
@@ -280,10 +278,10 @@ jobs:
 
       - run: cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
 
-      - name: Build (sin hwcodec; ffmpeg requiere setup custom upstream)
+      - name: Build (con hwcodec)
         env: { VCPKG_ROOT: "${{ github.workspace }}/vcpkg" }
         run: |
-          python3 ./build.py --flutter --unix-file-copy-paste
+          python3 ./build.py --flutter --hwcodec --unix-file-copy-paste
           ls -la rustdesk-*.deb || true
 
       - uses: actions/upload-artifact@v4
