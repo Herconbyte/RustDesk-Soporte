@@ -383,6 +383,29 @@ jobs:
           mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
           cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/
 
+      - name: Setup Android keystore para firma de release
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "WARN: ANDROID_KEYSTORE_BASE64 vacio — build firmara con debug keystore"
+            exit 0
+          fi
+          # Decodear keystore al app/ folder (donde file() del signing config lo busca)
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > flutter/android/app/herconbyte-release.jks
+          ls -la flutter/android/app/herconbyte-release.jks
+          # Crear key.properties en flutter/android/ (donde rootProject.file lo busca)
+          cat > flutter/android/key.properties <<EOF
+          storeFile=herconbyte-release.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          keyPassword=$ANDROID_KEY_PASSWORD
+          EOF
+          echo "key.properties creado (paths relativos a app/)"
+
       - name: Build APK
         run: |
           cd flutter
