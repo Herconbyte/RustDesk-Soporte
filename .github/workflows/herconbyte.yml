@@ -364,30 +364,37 @@ jobs:
 
       - run: cargo install cargo-ndk --version ${{ env.CARGO_NDK_VERSION }} --locked
 
-      - name: Build Android deps (vcpkg cross-compile) — arm64 + armv7
+      - name: Install rustup targets
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi
+
+      # IMPORTANTE: vcpkg manifest mode desinstala paquetes de OTROS triplets en cada
+      # 'vcpkg install'. Por eso alternamos: install arm64 → build arm64 → install armv7
+      # → build armv7. Si hacemos los dos installs seguidos, el segundo borra al primero
+      # (vimos 'Removing libvpx:arm64-android' en Run 13).
+
+      - name: Build deps + librustdesk.so para arm64-v8a
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
         run: |
           bash flutter/build_android_deps.sh arm64-v8a
-          bash flutter/build_android_deps.sh armeabi-v7a
+          cargo ndk --target aarch64-linux-android --platform 21 -- build --release --features flutter
+          mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
+          cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/
+          ls -lh flutter/android/app/src/main/jniLibs/arm64-v8a/
 
-      - name: Build librustdesk.so para arm64 + armv7 (universal APK)
+      - name: Build deps + librustdesk.so para armeabi-v7a
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
           VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
         run: |
-          rustup target add aarch64-linux-android armv7-linux-androideabi
-          # arm64-v8a (cels modernos 64-bit, ~92% del mercado)
-          cargo ndk --target aarch64-linux-android --platform 21 -- build --release --features flutter
-          mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
-          cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/
-          # armeabi-v7a (cels viejos/baratos 32-bit, ~7% del mercado)
+          bash flutter/build_android_deps.sh armeabi-v7a
           cargo ndk --target armv7-linux-androideabi --platform 21 -- build --release --features flutter
           mkdir -p flutter/android/app/src/main/jniLibs/armeabi-v7a
           cp target/armv7-linux-androideabi/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/armeabi-v7a/
+          ls -lh flutter/android/app/src/main/jniLibs/armeabi-v7a/
 
       - name: Setup Android keystore para firma de release
         env:
