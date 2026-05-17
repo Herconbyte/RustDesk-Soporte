@@ -45,7 +45,7 @@ env:
 
 jobs:
   generate-bridge:
-    if: inputs.build-windows || inputs.build-macos-arm || inputs.build-macos-intel || inputs.build-linux
+    if: inputs.build-windows || inputs.build-macos-arm || inputs.build-macos-intel || inputs.build-linux || inputs.build-android
     uses: ./.github/workflows/bridge.yml
 
   build-windows:
