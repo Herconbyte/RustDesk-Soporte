@@ -379,13 +379,15 @@ jobs:
           VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
         run: |
           bash flutter/build_android_deps.sh arm64-v8a
-          cargo ndk --target aarch64-linux-android --platform 21 -- build --release --features flutter
+          cargo ndk --target aarch64-linux-android --platform 21 -- build --release --features flutter,hwcodec
           mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
           # IMPORTANTE: renombrar a librustdesk.so (sin el doble lib) porque ffi.kt
           # llama System.loadLibrary("rustdesk") → busca librustdesk.so. Cargo genera
-          # liblibrustdesk.so (porque [lib].name = "librustdesk") y sin renombrar
-          # el APK no encuentra la lib y crashea al abrir.
+          # liblibrustdesk.so (porque [lib].name = "librustdesk").
           cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+          # CRITICO: copiar libc++_shared.so del NDK. Sin esto la app crashea al abrir
+          # porque librustdesk.so se linkea dinamicamente contra la runtime C++ de Android.
+          cp $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so flutter/android/app/src/main/jniLibs/arm64-v8a/
           ls -lh flutter/android/app/src/main/jniLibs/arm64-v8a/
 
       - name: Build deps + librustdesk.so para armeabi-v7a
@@ -395,9 +397,11 @@ jobs:
           VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
         run: |
           bash flutter/build_android_deps.sh armeabi-v7a
-          cargo ndk --target armv7-linux-androideabi --platform 21 -- build --release --features flutter
+          cargo ndk --target armv7-linux-androideabi --platform 21 -- build --release --features flutter,hwcodec
           mkdir -p flutter/android/app/src/main/jniLibs/armeabi-v7a
           cp target/armv7-linux-androideabi/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/armeabi-v7a/librustdesk.so
+          # Para armv7 el path del NDK es arm-linux-androideabi (no armv7a-)
+          cp $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/libc++_shared.so flutter/android/app/src/main/jniLibs/armeabi-v7a/
           ls -lh flutter/android/app/src/main/jniLibs/armeabi-v7a/
 
       - name: Setup Android keystore para firma de release
