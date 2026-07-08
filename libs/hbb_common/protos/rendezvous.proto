@@ -49,6 +49,10 @@ message ControlPermissions {
   uint64 permissions = 1;
 }
 
+message ControlledContext {
+  string conn_audit_ref = 1;
+}
+
 message PunchHole {
   bytes socket_addr = 1;
   string relay_server = 2;
@@ -58,6 +62,7 @@ message PunchHole {
   int32 upnp_port = 6;
   bytes socket_addr_v6 = 7;
   ControlPermissions control_permissions = 8;
+  ControlledContext controlled_context = 9;
 }
 
 message TestNatRequest {
@@ -103,6 +108,7 @@ message RegisterPkResponse {
     INVALID_ID_FORMAT = 5;
     NOT_SUPPORT = 6;
     SERVER_ERROR = 7;
+    NOT_DEPLOYED = 8;
   }
   Result result = 1;
   int32 keep_alive = 2;
@@ -145,6 +151,7 @@ message RequestRelay {
   ConnType conn_type = 7;
   string token = 8;
   ControlPermissions control_permissions = 9;
+  ControlledContext controlled_context = 10;
 }
 
 message RelayResponse {
@@ -173,6 +180,7 @@ message FetchLocalAddr {
   string relay_server = 2;
   bytes socket_addr_v6 = 3;
   ControlPermissions control_permissions = 4;
+  ControlledContext controlled_context = 5;
 }
 
 message LocalAddr {
