@@ -29,6 +29,11 @@ macro_rules! my_println{
 /// If it returns [`Some`], then the process will continue, and flutter gui will be started.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn core_main() -> Option<Vec<String>> {
+    // Herconbyte white-label: PRIMERISIMA linea, antes de cualquier acceso a Config.
+    // APP_NAME define la carpeta de config/logs (lazy en el primer acceso a Config),
+    // por eso va antes de global_init(). Cubre todos los binarios nativos (ui, --server,
+    // --cm, service, etc.), que entran todos por core_main().
+    crate::herconbyte_config::apply();
     if !crate::common::global_init() {
         return None;
     }

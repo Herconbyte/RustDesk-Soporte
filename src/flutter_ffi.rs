@@ -38,6 +38,10 @@ lazy_static::lazy_static! {
 }
 
 fn initialize(app_dir: &str, custom_client_config: &str) {
+    // Herconbyte white-label: PRIMERA linea del init de Flutter (cubre Android/iOS, que
+    // NO pasan por core_main). Debe ir antes de load_custom_client/global_init, que
+    // acceden a Config; APP_NAME define la carpeta de datos. Idempotente en desktop.
+    crate::herconbyte_config::apply();
     flutter::async_tasks::start_flutter_async_runner();
     // `APP_DIR` is set in `main_get_data_dir_ios()` on iOS.
     #[cfg(not(target_os = "ios"))]

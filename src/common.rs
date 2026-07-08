@@ -952,8 +952,11 @@ pub fn check_software_update() {
 // Because the url is always `https://api.rustdesk.com/version/latest`.
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
-    let (request, url) =
+    let (request, _url) =
         hbb_common::version_check_request(hbb_common::VER_TYPE_RUSTDESK_CLIENT.to_string());
+    // Herconbyte white-label: endpoint de update propio (fuera de hbb_common, que queda
+    // pristino). Ignoramos la url que devuelve version_check_request (api.rustdesk.com).
+    let url = crate::herconbyte_config::UPDATE_URL.to_string();
     let proxy_conf = Config::get_socks();
     let tls_url = get_url_for_tls(&url, &proxy_conf);
     let tls_type = get_cached_tls_type(tls_url);
@@ -1071,7 +1074,7 @@ fn get_api_server_(api: String, custom: String) -> String {
     if !api.is_empty() {
         return api.to_owned();
     }
-    return "https://api-soporte.herconbyte.com.ar".to_string();
+    return crate::herconbyte_config::API_SERVER.to_string();
     let s0 = get_custom_rendezvous_server(custom);
     if !s0.is_empty() {
         let s = crate::increase_port(&s0, -2);
@@ -1819,7 +1822,9 @@ pub async fn get_key(sync: bool) -> String {
         options.remove("key").unwrap_or_default()
     };
     if key.is_empty() {
-        key = config::RS_PUB_KEY.to_owned();
+        // Herconbyte white-label: key propia (fuera de hbb_common). Cubre Android
+        // (sin injection por instalador) y cualquier caso sin option 'key' seteada.
+        key = crate::herconbyte_config::RS_PUB_KEY.to_owned();
     }
     key
 }
