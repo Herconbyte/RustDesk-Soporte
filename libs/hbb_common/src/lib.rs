@@ -493,7 +493,10 @@ pub const VER_TYPE_RUSTDESK_CLIENT: &str = "rustdesk-client";
 pub const VER_TYPE_RUSTDESK_SERVER: &str = "rustdesk-server";
 
 pub fn version_check_request(typ: String) -> (VersionCheckRequest, String) {
-    const URL: &str = "https://api.rustdesk.com/version/latest";
+    // Herconbyte: endpoint propio de chequeo de version (antes api.rustdesk.com).
+    // Devuelve {"url":"https://herconbyte.com.ar/soporte/<version>"}; el cliente
+    // parsea <version> del final de la URL y la compara con la suya.
+    const URL: &str = "https://herconbyte.com.ar/soporte-version.php";
 
     use sysinfo::System;
     let system = System::new();
