@@ -664,7 +664,9 @@ class PeerSearchBar extends StatefulWidget {
 }
 
 class _PeerSearchBarState extends State<PeerSearchBar> {
-  var drawer = false;
+  // Herconbyte: arranca SIEMPRE expandida (antes 'false' = colapsada como lupa,
+  // habia que tocarla para escribir). Asi se salta de un cliente a otro sin clicks.
+  var drawer = true;
 
   @override
   Widget build(BuildContext context) {
@@ -745,13 +747,14 @@ class _PeerSearchBarState extends State<PeerSearchBar> {
                       padding: const EdgeInsets.only(right: 2),
                       onPressed: () {
                         setState(() {
+                          // Herconbyte: la X solo limpia el texto; la barra queda
+                          // expandida (no vuelve a colapsar a lupa).
                           peerSearchTextController.clear();
                           peerSearchText.value = "";
-                          drawer = false;
                         });
                       },
                       icon: Tooltip(
-                          message: translate('Close'),
+                          message: translate('Clear'),
                           child: Icon(
                             Icons.close,
                             color: Theme.of(context).hintColor,

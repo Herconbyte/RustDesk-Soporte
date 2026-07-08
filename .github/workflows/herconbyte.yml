@@ -177,6 +177,17 @@ jobs:
           VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
         run: ./build.py --flutter --hwcodec --unix-file-copy-paste
 
+      # CRITICO Apple Silicon: build.py copia el binario `service` DENTRO del .app
+      # DESPUES de que flutter lo firmo ad-hoc → la firma queda invalida. En M1/M2/M3
+      # macOS mata la app al abrir ("dañada") aunque se quite la cuarentena. Re-firmamos
+      # ad-hoc (--sign -, gratis, sin cert) para que arranque tras quitar cuarentena.
+      - name: Re-firmar ad-hoc (fix Apple Silicon)
+        run: |
+          APP="./flutter/build/macos/Build/Products/Release/RustDesk.app"
+          codesign --remove-signature "$APP" 2>/dev/null || true
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP" || true
+
       - name: Create unsigned DMG
         run: |
           create-dmg --icon "RustDesk.app" 200 190 \
@@ -232,6 +243,15 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET: "10.14"
           VCPKG_ROOT: "${{ github.workspace }}/vcpkg"
         run: ./build.py --flutter --hwcodec --unix-file-copy-paste
+
+      # Re-firma ad-hoc: mismo motivo que en arm64 (build.py rompe la firma al copiar
+      # `service`). En Intel es menos estricto pero lo dejamos consistente y prolijo.
+      - name: Re-firmar ad-hoc
+        run: |
+          APP="./flutter/build/macos/Build/Products/Release/RustDesk.app"
+          codesign --remove-signature "$APP" 2>/dev/null || true
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP" || true
 
       - name: Create unsigned DMG
         run: |
