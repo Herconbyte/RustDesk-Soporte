@@ -183,19 +183,19 @@ jobs:
       # ad-hoc (--sign -, gratis, sin cert) para que arranque tras quitar cuarentena.
       - name: Re-firmar ad-hoc (fix Apple Silicon)
         run: |
-          APP="./flutter/build/macos/Build/Products/Release/RustDesk.app"
+          APP="./flutter/build/macos/Build/Products/Release/Soporte Herconbyte.app"
           codesign --remove-signature "$APP" 2>/dev/null || true
           codesign --force --deep --sign - "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP" || true
 
       - name: Create unsigned DMG
         run: |
-          create-dmg --icon "RustDesk.app" 200 190 \
-            --hide-extension "RustDesk.app" \
+          create-dmg --icon "Soporte Herconbyte.app" 200 190 \
+            --hide-extension "Soporte Herconbyte.app" \
             --window-size 800 400 \
             --app-drop-link 600 185 \
             herconbyte-aarch64.dmg \
-            ./flutter/build/macos/Build/Products/Release/RustDesk.app
+            "./flutter/build/macos/Build/Products/Release/Soporte Herconbyte.app"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -248,19 +248,19 @@ jobs:
       # `service`). En Intel es menos estricto pero lo dejamos consistente y prolijo.
       - name: Re-firmar ad-hoc
         run: |
-          APP="./flutter/build/macos/Build/Products/Release/RustDesk.app"
+          APP="./flutter/build/macos/Build/Products/Release/Soporte Herconbyte.app"
           codesign --remove-signature "$APP" 2>/dev/null || true
           codesign --force --deep --sign - "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP" || true
 
       - name: Create unsigned DMG
         run: |
-          create-dmg --icon "RustDesk.app" 200 190 \
-            --hide-extension "RustDesk.app" \
+          create-dmg --icon "Soporte Herconbyte.app" 200 190 \
+            --hide-extension "Soporte Herconbyte.app" \
             --window-size 800 400 \
             --app-drop-link 600 185 \
             herconbyte-x86_64.dmg \
-            ./flutter/build/macos/Build/Products/Release/RustDesk.app
+            "./flutter/build/macos/Build/Products/Release/Soporte Herconbyte.app"
 
       - uses: actions/upload-artifact@v4
         with:

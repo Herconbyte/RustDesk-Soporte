@@ -5,7 +5,11 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = RustDesk
+// Con espacio a proposito: debe coincidir EXACTO con APP_NAME / get_app_name()
+// ("Soporte Herconbyte"), porque correct_app_name() reemplaza "RustDesk" por ese
+// valor en los paths de los plists del servicio (daemon/agent). Si no coinciden,
+// el modo servicio apunta a un ejecutable inexistente. Ver src/platform/macos.rs.
+PRODUCT_NAME = Soporte Herconbyte
 
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = com.carriez.flutterHbb
