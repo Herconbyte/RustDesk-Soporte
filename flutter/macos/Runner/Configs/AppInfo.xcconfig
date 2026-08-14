@@ -11,8 +11,12 @@
 // el modo servicio apunta a un ejecutable inexistente. Ver src/platform/macos.rs.
 PRODUCT_NAME = Soporte Herconbyte
 
-// The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.carriez.flutterHbb
+// The application's bundle identifier.
+// OJO: el que manda de verdad es el del project.pbxproj (lo pisa); este se deja igual
+// para que no queden dos valores distintos dando vueltas.
+// macOS ata los permisos (Accesibilidad, Grabacion de pantalla) a este identificador:
+// si se cambia, TODA instalacion existente los pierde y hay que volver a tildarlos.
+PRODUCT_BUNDLE_IDENTIFIER = com.herconbyte.soporte
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 Herconbyte. All rights reserved.
