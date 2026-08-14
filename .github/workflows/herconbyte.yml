@@ -48,10 +48,26 @@ jobs:
     if: inputs.build-windows || inputs.build-macos-arm || inputs.build-macos-intel || inputs.build-linux || inputs.build-android
     uses: ./.github/workflows/bridge.yml
 
+  # WindowInjection.dll: lo necesita el MODO PRIVADO 1 (overlay negro). Sin este dll al
+  # lado del exe, turn_on_privacy() corta en win_topmost_window.rs (~102) devolviendo
+  # Ok(false) y el modo privado no arranca NUNCA. Upstream lo compila en su pipeline
+  # (flutter-build.yml) y lo mete en el paquete; nuestro workflow custom se lo salteaba,
+  # por eso el dll viajaba copiado a mano (de version desconocida) o no viajaba.
+  build-topmost-window-dll:
+    name: WindowInjection.dll (modo privado 1)
+    if: inputs.build-windows
+    uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
+    with:
+      upload-artifact: true
+      target: windows-2022
+      configuration: Release
+      platform: x64
+      target_version: Windows10
+
   build-windows:
     name: Windows x86_64
     if: inputs.build-windows
-    needs: [generate-bridge]
+    needs: [generate-bridge, build-topmost-window-dll]
     runs-on: windows-2022
     steps:
       - uses: actions/github-script@v6
@@ -122,6 +138,42 @@ jobs:
           cp -r ./flutter/build/windows/x64/runner/Release/* dist-windows/
         shell: bash
 
+      # MODO PRIVADO 1: dll del overlay, compilado fresco en este mismo run (job
+      # build-topmost-window-dll, pineado al commit que espera esta version). Tiene que
+      # quedar JUNTO al exe: win_topmost_window.rs busca "WindowInjection.dll" en el
+      # directorio del ejecutable y, si no esta, el modo privado no se activa.
+      - name: Modo privado 1 - agregar WindowInjection.dll
+        uses: actions/download-artifact@v4
+        with:
+          name: topmostwindow-artifacts-x64
+          path: dist-windows/
+
+      # MODO PRIVADO 2: driver de display virtual (amyuni/usbmmidd). virtual_display_manager.rs
+      # lo instala on-demand con usbmmidd_v2\deviceinstaller64.exe; si la carpeta no viaja
+      # al lado del exe, falla con "No virtual displays". Upstream hace exactamente esto.
+      - name: Modo privado 2 - agregar driver usbmmidd_v2
+        run: |
+          set -e
+          curl -L -o usbmmidd_v2.zip https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip
+          unzip -q usbmmidd_v2.zip
+          rm -rf usbmmidd_v2/Win32 usbmmidd_v2.zip
+          cp -r usbmmidd_v2 dist-windows/
+          echo "=== Verificar que el driver quedo completo ==="
+          ls -la dist-windows/usbmmidd_v2/
+          test -f dist-windows/usbmmidd_v2/deviceinstaller64.exe
+          test -f dist-windows/usbmmidd_v2/usbmmIdd.inf
+          test -f dist-windows/usbmmidd_v2/x64/usbmmIdd.dll
+        shell: bash
+
+      - name: Verificar payload del modo privado (falla el build si falta algo)
+        run: |
+          set -e
+          echo "=== Contenido de dist-windows ==="
+          ls -la dist-windows/ | head -30
+          test -f "dist-windows/WindowInjection.dll" || { echo "FALTA WindowInjection.dll -> modo privado 1 NO funcionaria"; exit 1; }
+          echo "OK: WindowInjection.dll presente ($(stat -c%s dist-windows/WindowInjection.dll) bytes)"
+        shell: bash
+
       - uses: actions/upload-artifact@v4
         with:
           name: herconbyte-windows-x86_64
@@ -183,19 +235,19 @@ jobs:
       # ad-hoc (--sign -, gratis, sin cert) para que arranque tras quitar cuarentena.
       - name: Re-firmar ad-hoc (fix Apple Silicon)
         run: |
-          APP="./flutter/build/macos/Build/Products/Release/RustDesk.app"
+          APP="./flutter/build/macos/Build/Products/Release/Soporte Herconbyte.app"
           codesign --remove-signature "$APP" 2>/dev/null || true
           codesign --force --deep --sign - "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP" || true
 
       - name: Create unsigned DMG
         run: |
-          create-dmg --icon "RustDesk.app" 200 190 \
-            --hide-extension "RustDesk.app" \
+          create-dmg --icon "Soporte Herconbyte.app" 200 190 \
+            --hide-extension "Soporte Herconbyte.app" \
             --window-size 800 400 \
             --app-drop-link 600 185 \
             herconbyte-aarch64.dmg \
-            ./flutter/build/macos/Build/Products/Release/RustDesk.app
+            "./flutter/build/macos/Build/Products/Release/Soporte Herconbyte.app"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -248,19 +300,19 @@ jobs:
       # `service`). En Intel es menos estricto pero lo dejamos consistente y prolijo.
       - name: Re-firmar ad-hoc
         run: |
-          APP="./flutter/build/macos/Build/Products/Release/RustDesk.app"
+          APP="./flutter/build/macos/Build/Products/Release/Soporte Herconbyte.app"
           codesign --remove-signature "$APP" 2>/dev/null || true
           codesign --force --deep --sign - "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP" || true
 
       - name: Create unsigned DMG
         run: |
-          create-dmg --icon "RustDesk.app" 200 190 \
-            --hide-extension "RustDesk.app" \
+          create-dmg --icon "Soporte Herconbyte.app" 200 190 \
+            --hide-extension "Soporte Herconbyte.app" \
             --window-size 800 400 \
             --app-drop-link 600 185 \
             herconbyte-x86_64.dmg \
-            ./flutter/build/macos/Build/Products/Release/RustDesk.app
+            "./flutter/build/macos/Build/Products/Release/Soporte Herconbyte.app"
 
       - uses: actions/upload-artifact@v4
         with:
