@@ -3710,6 +3710,12 @@ fn get_create_service(exe: &str) -> String {
 if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\" del /f /q \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\"
 ", app_name = crate::get_app_name())
     } else {
+        // Herconbyte: el freno `stop-service` tambien vive en la config DEL SERVICIO,
+        // que el desinstalador no borra. Si queda puesto, el servicio nuevo arranca sin
+        // registrarse contra el servidor y la app dice "El servicio no se esta
+        // ejecutando" con el servicio corriendo. Se limpia justo antes de crearlo: el
+        // script mata el proceso viejo al empezar, asi que nadie reescribe el archivo.
+        crate::herconbyte_config::limpiar_freno_del_servicio();
         format!("
 sc create {app_name} binpath= \"\\\"{exe}\\\" --service\" start= auto DisplayName= \"{app_name} Service\"
 sc start {app_name}

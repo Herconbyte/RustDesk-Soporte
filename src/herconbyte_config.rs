@@ -62,3 +62,63 @@ pub fn apply() {
     // arriba en get_key() (src/common.rs) y get_api_server_() (src/common.rs), que son
     // codigo editable del crate principal. Ver esos edits.
 }
+
+/// Windows: sacarle el freno `stop-service` a la config DEL SERVICIO.
+///
+/// Sintoma que arregla: la app dice "El servicio no se esta ejecutando" con el
+/// servicio de Windows En ejecucion, la contrasena de un solo uso vacia y el equipo
+/// sin aparecer en la libreta. Caso real del 21/09/26 en la maquina de un cliente:
+/// dos ciclos de desinstalar e instalar no lo arreglaron.
+///
+/// Por que pasa: la config de opciones (`<APP_NAME>2.toml`) tiene DOS copias por
+/// maquina, la del usuario que instala y la del servicio -- que corre como
+/// LocalSystem, pero hbb_common redirige ese perfil a ServiceProfiles\LocalService
+/// (ver `patch()` en hbb_common/src/config.rs). Desinstalar escribe
+/// `stop-service = 'Y'` y NO borra la carpeta del servicio; al reinstalar,
+/// `install_service()` limpia la marca con `Config::set_option`, que escribe la
+/// copia del USUARIO. El servicio nuevo arranca, lee la SUYA, ve el freno y no se
+/// registra contra el servidor (rendezvous_mediator.rs), mientras el SCM lo muestra
+/// corriendo y la app lee esa misma opcion por IPC y pinta el cartel.
+///
+/// El `--import-config` de upstream no lo tapa: solo copia si el archivo del usuario
+/// es MAS NUEVO, y un `set_option` a vacio no reescribe nada cuando la clave ya no
+/// estaba de ese lado.
+///
+/// Se saca SOLO esa clave: el resto de las opciones del servicio se conservan.
+/// Borrar el archivo dejaria al equipo sin configuracion.
+#[cfg(windows)]
+pub fn limpiar_freno_del_servicio() {
+    let raiz = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_owned());
+    let archivo = std::path::Path::new(&raiz)
+        .join("ServiceProfiles")
+        .join("LocalService")
+        .join("AppData")
+        .join("Roaming")
+        .join(APP_NAME)
+        .join("config")
+        .join(format!("{}2.toml", APP_NAME));
+    // Instalacion limpia: el archivo todavia no existe y no hay nada que sacar.
+    let Ok(texto) = std::fs::read_to_string(&archivo) else {
+        return;
+    };
+    if !texto.contains("stop-service") {
+        return;
+    }
+    let mut salida = String::with_capacity(texto.len());
+    for linea in texto.lines() {
+        // La clave puede estar pelada (`stop-service = 'Y'`) o entrecomillada.
+        if linea
+            .trim_start()
+            .trim_start_matches('"')
+            .starts_with("stop-service")
+        {
+            continue;
+        }
+        salida.push_str(linea);
+        salida.push('\n');
+    }
+    match std::fs::write(&archivo, salida) {
+        Ok(()) => hbb_common::log::info!("saque stop-service de {:?}", archivo),
+        Err(e) => hbb_common::log::warn!("no pude limpiar stop-service en {:?}: {}", archivo, e),
+    }
+}
