@@ -3303,6 +3303,73 @@ Widget buildErrorBanner(BuildContext context,
       ));
 }
 
+/// Herconbyte: alias que tiene [peerId] en la libreta del servidor (address
+/// book), o '' si no está o no tiene alias. Busca primero en la libreta
+/// actual, después en las demás cargadas en memoria y, si no hay ninguna
+/// cargada (motor de flutter sin libreta), en la caché que el cliente guarda
+/// en disco (`bind.mainLoadAb()`), solo si hay sesión iniciada con el mismo
+/// token que la escribió.
+Future<String> getAbAliasForPeer(String peerId) async {
+  String fromPeers(Iterable<Peer> peers) {
+    for (final p in peers) {
+      if (p.id == peerId && p.alias.trim().isNotEmpty) return p.alias.trim();
+    }
+    return '';
+  }
+
+  try {
+    final abModel = gFFI.abModel;
+    var alias = fromPeers(abModel.current.peers);
+    if (alias.isNotEmpty) return alias;
+    for (final ab in abModel.addressbooks.values) {
+      alias = fromPeers(ab.peers);
+      if (alias.isNotEmpty) return alias;
+    }
+    if (abModel.addressbooks.isNotEmpty) return '';
+    // Sin libreta en memoria: leer la caché en disco.
+    final token = bind.mainGetLocalOption(key: 'access_token');
+    if (token.isEmpty) return '';
+    final data = jsonDecode(await bind.mainLoadAb());
+    if (data is! Map || data['access_token'] != token) return '';
+    final entries = data['ab_entries'];
+    if (entries is! List) return '';
+    for (final e in entries) {
+      final peers = e is Map ? e['peers'] : null;
+      if (peers is! List) continue;
+      for (final p in peers) {
+        if (p is Map && p['id'] == peerId && p['alias'] is String) {
+          final a = (p['alias'] as String).trim();
+          if (a.isNotEmpty) return a;
+        }
+      }
+    }
+  } catch (e) {
+    debugPrint('getAbAliasForPeer: $e');
+  }
+  return '';
+}
+
+/// Herconbyte: antes de abrir una sesión (remota, archivos, cámara, túnel,
+/// terminal) copia el alias de la libreta al alias LOCAL del peer, que es el
+/// que leen el título de la pestaña, la ventana y la lista de pestañas
+/// (`DesktopTab.tablabelGetter` → `getDesktopTabLabel`). Así el título es el
+/// de la libreta conectes desde donde conectes (CRM por URI, ID tipeado,
+/// recientes) y, si cambió en la libreta, gana el de la libreta. Si el peer no
+/// está en la libreta no toca nada (queda el comportamiento de siempre).
+Future<void> syncPeerAliasFromAb(String peerId) async {
+  if (peerId.isEmpty) return;
+  try {
+    final abAlias = await getAbAliasForPeer(peerId);
+    if (abAlias.isEmpty) return;
+    final local = await bind.mainGetPeerOption(id: peerId, key: 'alias');
+    if (local != abAlias) {
+      await bind.mainSetPeerAlias(id: peerId, alias: abAlias);
+    }
+  } catch (e) {
+    debugPrint('syncPeerAliasFromAb: $e');
+  }
+}
+
 String getDesktopTabLabel(String peerId, String alias) {
   String label = alias.isEmpty ? peerId : alias;
   try {

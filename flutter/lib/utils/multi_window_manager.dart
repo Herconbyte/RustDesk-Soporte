@@ -231,6 +231,9 @@ class RustDeskMultiWindowManager {
     bool? isSharedPassword,
     String? connToken,
   }) async {
+    // Herconbyte: el título de la pestaña sale del alias local; lo alineamos
+    // con la libreta ANTES de crear/activar la pestaña (ver common.dart).
+    await syncPeerAliasFromAb(remoteId);
     var params = {
       "type": type.index,
       "id": remoteId,
@@ -354,6 +357,8 @@ class RustDeskMultiWindowManager {
     bool? forceRelay,
     String? connToken,
   }) async {
+    // Herconbyte: igual que en newSession, alias de la libreta → alias local.
+    await syncPeerAliasFromAb(remoteId);
     // Iterate through terminal windows in reverse order to prioritize
     // the most recently added or used windows, as they are more likely
     // to have an active session.
