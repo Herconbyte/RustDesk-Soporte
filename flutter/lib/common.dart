@@ -3372,6 +3372,9 @@ Future<void> syncPeerAliasFromAb(String peerId) async {
 
 String getDesktopTabLabel(String peerId, String alias) {
   String label = alias.isEmpty ? peerId : alias;
+  // Herconbyte (15/11/26): con alias (el de la libreta, «Cliente - Equipo - Cel») la pestaña
+  // muestra solo el alias; el «@hostname» se agrega únicamente cuando no hay alias.
+  if (alias.isNotEmpty) return label;
   try {
     String peer = bind.mainGetPeerSync(id: peerId);
     Map<String, dynamic> config = jsonDecode(peer);
